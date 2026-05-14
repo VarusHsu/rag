@@ -20,15 +20,15 @@ import (
 
 type noopUserRepo struct{}
 
-func (n *noopUserRepo) Create(ctx context.Context, input repository.CreateUserParams) (*model.User, error) {
+func (n *noopUserRepo) Create(_ context.Context, _ repository.CreateUserParams) (*model.User, error) {
 	return nil, repository.ErrUserNotFound
 }
 
-func (n *noopUserRepo) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (n *noopUserRepo) GetByEmail(_ context.Context, _ string) (*model.User, error) {
 	return nil, repository.ErrUserNotFound
 }
 
-func (n *noopUserRepo) UpdateLastLogin(ctx context.Context, userID string, at time.Time) error {
+func (n *noopUserRepo) UpdateLastLogin(_ context.Context, _ string, _ time.Time) error {
 	return nil
 }
 

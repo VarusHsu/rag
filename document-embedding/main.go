@@ -20,16 +20,16 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
 
 	logger, err := createLogger(cfg.LogLevel)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "create logger: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "create logger: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	conn, err := amqp.Dial(cfg.RabbitMQURL)
 	if err != nil {

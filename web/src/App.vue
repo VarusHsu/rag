@@ -3,8 +3,6 @@ import { computed, ref } from 'vue'
 import { createHttpClient, withRequestID } from './lib/http'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-const http = createHttpClient(apiBase)
-http.useRequest(withRequestID)
 
 const activeTab = ref('login')
 const loading = ref(false)
@@ -15,6 +13,33 @@ const lastRequestId = ref('')
 const token = ref(localStorage.getItem('auth_token') || '')
 const user = ref(loadUser())
 const activePage = ref(token.value ? 'upload' : 'auth')
+
+function clearAuthState() {
+  token.value = ''
+  user.value = null
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('auth_user')
+  activePage.value = 'auth'
+}
+
+const http = createHttpClient(apiBase, {
+  onUnauthorized: (err) => {
+    clearAuthState()
+    errorMsg.value = 'Login expired, please login again'
+    lastRequestId.value = err?.requestId || ''
+  }
+})
+
+http.useRequest((req) => {
+  const next = withRequestID(req)
+  if (token.value) {
+    next.options.headers = {
+      ...next.options.headers,
+      Authorization: `Bearer ${token.value}`
+    }
+  }
+  return next
+})
 
 const loginForm = ref({
   email: '',
@@ -121,11 +146,6 @@ async function submitUpload() {
         file_name: file.name,
         content_type: file.type || 'application/octet-stream',
         file_size: file.size
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token.value}`
-        }
       }
     )
     lastRequestId.value = requestId || ''
@@ -156,24 +176,16 @@ async function logout() {
   loading.value = true
 
   try {
-    const { data, requestId } = await http.post('/api/v1/auth/logout', {}, {
-      headers: {
-        Authorization: `Bearer ${token.value}`
-      }
-    })
+    const { data, requestId } = await http.post('/api/v1/auth/logout', {})
     lastRequestId.value = requestId || data?.request_id || ''
     successMsg.value = data?.message || 'Logout success'
   } catch (err) {
     errorMsg.value = err.message || 'Logout failed'
     lastRequestId.value = err.requestId || ''
   } finally {
-    token.value = ''
-    user.value = null
     selectedFile.value = null
     uploadInfo.value = null
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    activePage.value = 'auth'
+    clearAuthState()
     loading.value = false
   }
 }
@@ -189,7 +201,7 @@ async function logout() {
       <p v-if="successMsg" class="alert success">{{ successMsg }}</p>
       <p v-if="lastRequestId" class="trace-id">request_id: {{ lastRequestId }}</p>
 
-      <template v-if="isLoggedIn && user && activePage === 'upload'">
+      <template v-if="activePage === 'upload' && isLoggedIn && user">
         <div class="profile">
           <p><strong>User:</strong> {{ user.username }}</p>
           <p><strong>Email:</strong> {{ user.email }}</p>
@@ -280,4 +292,3 @@ async function logout() {
     </section>
   </main>
 </template>
-

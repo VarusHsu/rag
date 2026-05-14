@@ -12,7 +12,7 @@ type fakePresignClient struct {
 	err error
 }
 
-func (f *fakePresignClient) PresignedPutObject(ctx context.Context, bucketName string, objectName string, expires time.Duration) (*url.URL, error) {
+func (f *fakePresignClient) PresignedPutObject(_ context.Context, _ string, _ string, _ time.Duration) (*url.URL, error) {
 	return f.url, f.err
 }
 

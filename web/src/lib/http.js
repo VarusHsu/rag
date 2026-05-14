@@ -16,9 +16,10 @@ export function generateRequestId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-export function createHttpClient(baseURL) {
+export function createHttpClient(baseURL, options = {}) {
   const requestInterceptors = []
   const responseInterceptors = []
+  const onUnauthorized = typeof options.onUnauthorized === 'function' ? options.onUnauthorized : null
 
   async function request(path, options = {}) {
     let req = {
@@ -63,6 +64,10 @@ export function createHttpClient(baseURL) {
       error.requestId = result.data?.request_id || result.requestId
       error.code = businessCode
       error.data = result.data
+
+      if (error.status === 401 && onUnauthorized) {
+        onUnauthorized(error)
+      }
       throw error
     }
 

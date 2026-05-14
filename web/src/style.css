@@ -41,21 +41,31 @@ h1 {
 .tabs {
   margin-top: 16px;
   display: flex;
-  gap: 8px;
+  gap: 0;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .tab {
   flex: 1;
-  border: 1px solid #d0d5dd;
-  border-radius: 8px;
-  background: #fff;
-  padding: 10px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: 12px 0;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.tab:hover {
+  color: #4f46e5;
 }
 
 .tab.active {
-  border-color: #4f46e5;
   color: #4f46e5;
+  border-bottom-color: #4f46e5;
 }
 
 .form {
