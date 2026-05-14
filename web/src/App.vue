@@ -91,12 +91,28 @@ async function submitRegister() {
   }
 }
 
-function logout() {
-  token.value = ''
-  user.value = null
-  localStorage.removeItem('auth_token')
-  localStorage.removeItem('auth_user')
+async function logout() {
   clearMessage()
+  loading.value = true
+
+  try {
+    const { data, requestId } = await http.post('/api/v1/auth/logout', {}, {
+      headers: {
+        Authorization: `Bearer ${token.value}`
+      }
+    })
+    lastRequestId.value = requestId || data?.request_id || ''
+    successMsg.value = data?.message || 'Logout success'
+  } catch (err) {
+    errorMsg.value = err.message || 'Logout failed'
+    lastRequestId.value = err.requestId || ''
+  } finally {
+    token.value = ''
+    user.value = null
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    loading.value = false
+  }
 }
 </script>
 

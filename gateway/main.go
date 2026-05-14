@@ -24,27 +24,34 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logx.Fatal("load config failed", logx.Fields{"error": err.Error()})
+		logx.Error("load config failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
 	}
 
 	ctx := context.Background()
 	gormDB, err := db.NewGormDB(ctx, cfg.DatabaseURL)
 	if err != nil {
-		logx.Fatal("connect database failed", logx.Fields{"error": err.Error()})
+		logx.Error("connect database failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
 	}
 
 	sqlDB, err := gormDB.DB()
 	if err != nil {
-		logx.Fatal("open sql db failed", logx.Fields{"error": err.Error()})
+		logx.Error("open sql db failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
 	userRepo := repository.NewGormUserRepository(gormDB)
 	jwtManager := security.NewJWTManager(cfg.JWTSecret, cfg.JWTExpireMinutes)
-	authService := service.NewAuthService(userRepo, jwtManager)
+	tokenBlacklist := security.NewInMemoryTokenBlacklist()
+	authService := service.NewAuthService(userRepo, jwtManager, tokenBlacklist)
 	authHandler := handler.NewAuthHandler(authService)
 
-	engine := router.New(authHandler)
+	engine := router.New(authHandler, jwtManager, tokenBlacklist)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           engine,
@@ -54,7 +61,9 @@ func main() {
 	go func() {
 		logx.Info("gateway listening", logx.Fields{"port": cfg.Port})
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logx.Fatal("server error", logx.Fields{"error": err.Error()})
+			logx.Error("server error", logx.Fields{"error": err.Error()})
+			logx.Sync()
+			os.Exit(1)
 		}
 	}()
 

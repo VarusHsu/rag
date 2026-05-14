@@ -245,3 +245,75 @@ func TestAuthHandler_LoginUnauthorizedIncludesRequestID(t *testing.T) {
 		t.Fatalf("expected response request_id req-login-unauth, got %v", resp["request_id"])
 	}
 }
+
+func TestAuthHandler_LogoutSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &mockUserRepo{}
+	jwt := security.NewJWTManager("test-secret", 60)
+	blacklist := security.NewInMemoryTokenBlacklist()
+	svc := service.NewAuthService(repo, jwt, blacklist)
+	h := NewAuthHandler(svc)
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	r.POST("/logout", middleware.RequireAuth(jwt, blacklist), h.Logout)
+
+	token, err := jwt.GenerateToken("u1", "alice@example.com", "user")
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(middleware.HeaderRequestID, "req-logout-1")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+	if !blacklist.IsRevoked(token) {
+		t.Fatal("expected token to be revoked")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got, _ := resp["message"].(string); got != "logout success" {
+		t.Fatalf("expected logout success message, got %v", resp["message"])
+	}
+	if got, _ := resp["request_id"].(string); got != "req-logout-1" {
+		t.Fatalf("expected response request_id req-logout-1, got %v", resp["request_id"])
+	}
+}
+
+func TestAuthHandler_LogoutUnauthorizedWithoutToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &mockUserRepo{}
+	jwt := security.NewJWTManager("test-secret", 60)
+	blacklist := security.NewInMemoryTokenBlacklist()
+	svc := service.NewAuthService(repo, jwt, blacklist)
+	h := NewAuthHandler(svc)
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	r.POST("/logout", middleware.RequireAuth(jwt, blacklist), h.Logout)
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", http.NoBody)
+	req.Header.Set(middleware.HeaderRequestID, "req-logout-unauth")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got, _ := resp["request_id"].(string); got != "req-logout-unauth" {
+		t.Fatalf("expected response request_id req-logout-unauth, got %v", resp["request_id"])
+	}
+}

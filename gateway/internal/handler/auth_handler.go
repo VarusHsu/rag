@@ -100,6 +100,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+func (h *AuthHandler) Logout(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	err := h.auth.Logout(ctx, middleware.GetToken(c), middleware.GetClaims(c))
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUnauthorized):
+			writeError(c, http.StatusUnauthorized, "unauthorized")
+		default:
+			writeError(c, http.StatusInternalServerError, "logout failed")
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"request_id": middleware.GetRequestID(c),
+		"message":    "logout success",
+	})
+}
+
 func writeError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{
 		"error":      message,

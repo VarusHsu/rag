@@ -6,12 +6,17 @@ import (
 
 	"gateway/internal/handler"
 	"gateway/internal/middleware"
+	"gateway/internal/security"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-func New(authHandler *handler.AuthHandler) *gin.Engine {
+func New(
+	authHandler *handler.AuthHandler,
+	jwtManager *security.JWTManager,
+	tokenRevoker security.TokenRevoker,
+) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestTrace())
@@ -34,6 +39,7 @@ func New(authHandler *handler.AuthHandler) *gin.Engine {
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
+		auth.POST("/logout", middleware.RequireAuth(jwtManager, tokenRevoker), authHandler.Logout)
 	}
 
 	return r

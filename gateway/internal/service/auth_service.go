@@ -18,6 +18,7 @@ var (
 	ErrConflict           = errors.New("user already exists")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidInput       = errors.New("invalid input")
+	ErrUnauthorized       = errors.New("unauthorized")
 )
 
 type RegisterInput struct {
@@ -51,12 +52,20 @@ type PublicUser struct {
 }
 
 type AuthService struct {
-	users repository.UserRepository
-	jwt   *security.JWTManager
+	users        repository.UserRepository
+	jwt          *security.JWTManager
+	tokenRevoker security.TokenRevoker
 }
 
-func NewAuthService(users repository.UserRepository, jwt *security.JWTManager) *AuthService {
-	return &AuthService{users: users, jwt: jwt}
+func NewAuthService(users repository.UserRepository, jwt *security.JWTManager, tokenRevoker ...security.TokenRevoker) *AuthService {
+	var revoker security.TokenRevoker
+	if len(tokenRevoker) > 0 && tokenRevoker[0] != nil {
+		revoker = tokenRevoker[0]
+	} else {
+		revoker = security.NewInMemoryTokenBlacklist()
+	}
+
+	return &AuthService{users: users, jwt: jwt, tokenRevoker: revoker}
 }
 
 func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*AuthResult, error) {
@@ -125,6 +134,22 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 	}
 
 	return &AuthResult{Token: token, User: toPublicUser(*user)}, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, token string, claims *security.Claims) error {
+	_ = ctx
+
+	if token == "" || claims == nil {
+		return ErrUnauthorized
+	}
+
+	expiresAt := time.Now().Add(time.Minute)
+	if claims.ExpiresAt != nil {
+		expiresAt = claims.ExpiresAt.Time
+	}
+
+	s.tokenRevoker.Revoke(token, expiresAt)
+	return nil
 }
 
 func toPublicUser(user model.User) PublicUser {

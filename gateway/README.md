@@ -6,6 +6,7 @@ Gin + PostgreSQL login/register service.
 
 - `POST /api/v1/auth/register` for registration
 - `POST /api/v1/auth/login` for authentication
+- `POST /api/v1/auth/logout` for logout and token revocation
 - Password hashing with bcrypt
 - JWT token generation
 - PostgreSQL user repository
@@ -58,6 +59,14 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 ```
 
 All API responses include `X-Request-Id` header, and backend logs print `request_id=...` for each request.
+
+### Logout
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H 'Authorization: Bearer <your-jwt-token>' \
+  -H 'X-Request-Id: req-demo-logout-001'
+```
 
 ## Test
 

@@ -169,3 +169,36 @@ func TestAuthService_LoginSuccess(t *testing.T) {
 		t.Fatal("expected UpdateLastLogin to be called")
 	}
 }
+
+func TestAuthService_LogoutRevokesToken(t *testing.T) {
+	repo := &mockUserRepo{}
+	jwt := security.NewJWTManager("test-secret", 60)
+	blacklist := security.NewInMemoryTokenBlacklist()
+	svc := NewAuthService(repo, jwt, blacklist)
+
+	token, err := jwt.GenerateToken("u1", "alice@example.com", "user")
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+	claims, err := jwt.ParseToken(token)
+	if err != nil {
+		t.Fatalf("ParseToken() error = %v", err)
+	}
+
+	if err := svc.Logout(context.Background(), token, claims); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+	if !blacklist.IsRevoked(token) {
+		t.Fatal("expected token to be revoked after logout")
+	}
+}
+
+func TestAuthService_LogoutUnauthorized(t *testing.T) {
+	repo := &mockUserRepo{}
+	jwt := security.NewJWTManager("test-secret", 60)
+	svc := NewAuthService(repo, jwt)
+
+	if err := svc.Logout(context.Background(), "", nil); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
