@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"gateway/internal/config"
 	"gateway/internal/db"
 	"gateway/internal/handler"
+	"gateway/internal/logx"
 	"gateway/internal/repository"
 	"gateway/internal/router"
 	"gateway/internal/security"
@@ -20,20 +20,22 @@ import (
 )
 
 func main() {
+	defer logx.Sync()
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		logx.Fatal("load config failed", logx.Fields{"error": err.Error()})
 	}
 
 	ctx := context.Background()
 	gormDB, err := db.NewGormDB(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connect database: %v", err)
+		logx.Fatal("connect database failed", logx.Fields{"error": err.Error()})
 	}
 
 	sqlDB, err := gormDB.DB()
 	if err != nil {
-		log.Fatalf("open sql db: %v", err)
+		logx.Fatal("open sql db failed", logx.Fields{"error": err.Error()})
 	}
 	defer sqlDB.Close()
 
@@ -50,9 +52,9 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("gateway listening on :%s", cfg.Port)
+		logx.Info("gateway listening", logx.Fields{"port": cfg.Port})
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("server error: %v", err)
+			logx.Fatal("server error", logx.Fields{"error": err.Error()})
 		}
 	}()
 
@@ -63,6 +65,6 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("server shutdown error: %v", err)
+		logx.Error("server shutdown error", logx.Fields{"error": err.Error()})
 	}
 }

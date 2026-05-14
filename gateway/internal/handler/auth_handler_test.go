@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"gateway/internal/middleware"
 	"gateway/internal/model"
 	"gateway/internal/repository"
 	"gateway/internal/security"
@@ -165,5 +166,82 @@ func TestAuthHandler_LoginSuccess(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAuthHandler_RegisterSuccessIncludesRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	repo := &mockUserRepo{
+		createFn: func(ctx context.Context, input repository.CreateUserParams) (*model.User, error) {
+			return &model.User{
+				ID:           "u1",
+				Username:     input.Username,
+				Email:        input.Email,
+				PasswordHash: input.PasswordHash,
+				Role:         "user",
+				Status:       "active",
+			}, nil
+		},
+	}
+	h := newTestAuthHandler(repo)
+	r.POST("/register", h.Register)
+
+	body := `{"username":"alice","email":"alice@example.com","password":"12345678"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(middleware.HeaderRequestID, "req-register-1")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	if got := w.Header().Get(middleware.HeaderRequestID); got != "req-register-1" {
+		t.Fatalf("expected response header request id req-register-1, got %s", got)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got, _ := resp["request_id"].(string); got != "req-register-1" {
+		t.Fatalf("expected response request_id req-register-1, got %v", resp["request_id"])
+	}
+}
+
+func TestAuthHandler_LoginUnauthorizedIncludesRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	repo := &mockUserRepo{
+		getByEmailFn: func(ctx context.Context, email string) (*model.User, error) {
+			return nil, repository.ErrUserNotFound
+		},
+	}
+	h := newTestAuthHandler(repo)
+	r.POST("/login", h.Login)
+
+	body := `{"email":"alice@example.com","password":"12345678"}`
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(middleware.HeaderRequestID, "req-login-unauth")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got, _ := resp["request_id"].(string); got != "req-login-unauth" {
+		t.Fatalf("expected response request_id req-login-unauth, got %v", resp["request_id"])
 	}
 }

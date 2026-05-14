@@ -32,3 +32,8 @@ The page calls:
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 
+## Tracing
+
+- Frontend uses a request interceptor to inject `X-Request-Id` on every request.
+- The UI displays the latest `request_id` from response headers or response body.
+

@@ -1,12 +1,16 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { createHttpClient, withRequestID } from './lib/http'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const http = createHttpClient(apiBase)
+http.useRequest(withRequestID)
 
 const activeTab = ref('login')
 const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
+const lastRequestId = ref('')
 const token = ref(localStorage.getItem('auth_token') || '')
 const user = ref(loadUser())
 
@@ -36,6 +40,7 @@ function loadUser() {
 function clearMessage() {
   errorMsg.value = ''
   successMsg.value = ''
+  lastRequestId.value = ''
 }
 
 async function submitLogin() {
@@ -43,16 +48,8 @@ async function submitLogin() {
   loading.value = true
 
   try {
-    const res = await fetch(`${apiBase}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(loginForm.value)
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || 'Login failed')
-    }
+    const { data, requestId } = await http.post('/api/v1/auth/login', loginForm.value)
+    lastRequestId.value = requestId || data?.request_id || ''
 
     token.value = data.token
     user.value = data.user
@@ -61,6 +58,7 @@ async function submitLogin() {
     successMsg.value = `Welcome back, ${data.user.username}!`
   } catch (err) {
     errorMsg.value = err.message || 'Login failed'
+    lastRequestId.value = err.requestId || ''
   } finally {
     loading.value = false
   }
@@ -76,16 +74,8 @@ async function submitRegister() {
   }
 
   try {
-    const res = await fetch(`${apiBase}/api/v1/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || 'Register failed')
-    }
+    const { data, requestId } = await http.post('/api/v1/auth/register', payload)
+    lastRequestId.value = requestId || data?.request_id || ''
 
     token.value = data.token
     user.value = data.user
@@ -95,6 +85,7 @@ async function submitRegister() {
     activeTab.value = 'login'
   } catch (err) {
     errorMsg.value = err.message || 'Register failed'
+    lastRequestId.value = err.requestId || ''
   } finally {
     loading.value = false
   }
@@ -117,6 +108,7 @@ function logout() {
 
       <p v-if="errorMsg" class="alert error">{{ errorMsg }}</p>
       <p v-if="successMsg" class="alert success">{{ successMsg }}</p>
+      <p v-if="lastRequestId" class="trace-id">request_id: {{ lastRequestId }}</p>
 
       <template v-if="isLoggedIn && user">
         <div class="profile">

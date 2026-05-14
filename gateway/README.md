@@ -9,6 +9,7 @@ Gin + PostgreSQL login/register service.
 - Password hashing with bcrypt
 - JWT token generation
 - PostgreSQL user repository
+- Request tracing with `X-Request-Id` (auto generated if missing)
 
 ## Prerequisites
 
@@ -52,8 +53,11 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: req-demo-001' \
   -d '{"email":"alice@example.com","password":"12345678"}'
 ```
+
+All API responses include `X-Request-Id` header, and backend logs print `request_id=...` for each request.
 
 ## Test
 
