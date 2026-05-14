@@ -54,16 +54,23 @@ export function createHttpClient(baseURL) {
       result = (await interceptor(result)) || result
     }
 
-    if (!result.response.ok) {
-      const message = result.data?.error || `Request failed with status ${result.response.status}`
+    const businessCode = typeof result.data?.code === 'number' ? result.data.code : null
+    const message = result.data?.msg || result.data?.error || `Request failed with status ${result.response.status}`
+
+    if (!result.response.ok || (businessCode !== null && businessCode !== 0)) {
       const error = new Error(message)
       error.status = result.response.status
-      error.requestId = result.requestId
+      error.requestId = result.data?.request_id || result.requestId
+      error.code = businessCode
       error.data = result.data
       throw error
     }
 
-    return result
+    return {
+      ...result,
+      requestId: result.data?.request_id || result.requestId,
+      data: result.data?.data ?? result.data
+    }
   }
 
   return {

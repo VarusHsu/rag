@@ -12,6 +12,7 @@ import (
 	"gateway/internal/middleware"
 	"gateway/internal/model"
 	"gateway/internal/repository"
+	"gateway/internal/response"
 	"gateway/internal/security"
 	"gateway/internal/service"
 
@@ -67,6 +68,14 @@ func TestAuthHandler_RegisterValidationError(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d, body=%s", w.Code, w.Body.String())
 	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeInvalidParams {
+		t.Fatalf("expected business code %d, got %d", response.CodeInvalidParams, got)
+	}
 }
 
 func TestAuthHandler_RegisterSuccess(t *testing.T) {
@@ -103,7 +112,11 @@ func TestAuthHandler_RegisterSuccess(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response error: %v", err)
 	}
-	if resp["token"] == "" {
+	if got := int(resp["code"].(float64)); got != response.CodeSuccess {
+		t.Fatalf("expected business code 0, got %d", got)
+	}
+	data := resp["data"].(map[string]any)
+	if data["token"] == "" {
 		t.Fatal("expected token in response")
 	}
 }
@@ -128,6 +141,14 @@ func TestAuthHandler_LoginUnauthorized(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeInvalidCredentials {
+		t.Fatalf("expected business code %d, got %d", response.CodeInvalidCredentials, got)
 	}
 }
 
@@ -166,6 +187,14 @@ func TestAuthHandler_LoginSuccess(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeSuccess {
+		t.Fatalf("expected business code 0, got %d", got)
 	}
 }
 
@@ -208,6 +237,9 @@ func TestAuthHandler_RegisterSuccessIncludesRequestID(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response error: %v", err)
 	}
+	if got := int(resp["code"].(float64)); got != response.CodeSuccess {
+		t.Fatalf("expected business code 0, got %d", got)
+	}
 	if got, _ := resp["request_id"].(string); got != "req-register-1" {
 		t.Fatalf("expected response request_id req-register-1, got %v", resp["request_id"])
 	}
@@ -240,6 +272,9 @@ func TestAuthHandler_LoginUnauthorizedIncludesRequestID(t *testing.T) {
 	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeInvalidCredentials {
+		t.Fatalf("expected business code %d, got %d", response.CodeInvalidCredentials, got)
 	}
 	if got, _ := resp["request_id"].(string); got != "req-login-unauth" {
 		t.Fatalf("expected response request_id req-login-unauth, got %v", resp["request_id"])
@@ -280,8 +315,12 @@ func TestAuthHandler_LogoutSuccess(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response error: %v", err)
 	}
-	if got, _ := resp["message"].(string); got != "logout success" {
-		t.Fatalf("expected logout success message, got %v", resp["message"])
+	if got := int(resp["code"].(float64)); got != response.CodeSuccess {
+		t.Fatalf("expected business code 0, got %d", got)
+	}
+	data := resp["data"].(map[string]any)
+	if got, _ := data["message"].(string); got != "logout success" {
+		t.Fatalf("expected logout success message, got %v", data["message"])
 	}
 	if got, _ := resp["request_id"].(string); got != "req-logout-1" {
 		t.Fatalf("expected response request_id req-logout-1, got %v", resp["request_id"])
@@ -312,6 +351,9 @@ func TestAuthHandler_LogoutUnauthorizedWithoutToken(t *testing.T) {
 	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeUnauthorized {
+		t.Fatalf("expected business code %d, got %d", response.CodeUnauthorized, got)
 	}
 	if got, _ := resp["request_id"].(string); got != "req-logout-unauth" {
 		t.Fatalf("expected response request_id req-logout-unauth, got %v", resp["request_id"])

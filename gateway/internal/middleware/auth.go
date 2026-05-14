@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"gateway/internal/response"
 	"gateway/internal/security"
 
 	"github.com/gin-gonic/gin"
@@ -77,8 +78,5 @@ func extractBearerToken(header string) string {
 }
 
 func abortUnauthorized(c *gin.Context, message string) {
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-		"error":      message,
-		"request_id": GetRequestID(c),
-	})
+	response.AbortError(c, http.StatusUnauthorized, response.CodeUnauthorized, GetRequestID(c), message)
 }

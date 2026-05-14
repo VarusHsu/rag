@@ -2,6 +2,22 @@
 
 Gin + PostgreSQL login/register service.
 
+## Response Format
+
+All APIs return a unified envelope:
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "request_id": "req-demo-001",
+  "data": {}
+}
+```
+
+- `code = 0` means success
+- `code != 0` means business error
+
 ## Features
 
 - `POST /api/v1/auth/register` for registration

@@ -6,6 +6,7 @@ import (
 
 	"gateway/internal/handler"
 	"gateway/internal/middleware"
+	"gateway/internal/response"
 	"gateway/internal/security"
 
 	"github.com/gin-contrib/cors"
@@ -31,7 +32,7 @@ func New(
 	}))
 
 	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		response.Success(c, http.StatusOK, middleware.GetRequestID(c), gin.H{"status": "ok"})
 	})
 
 	v1 := r.Group("/api/v1")

@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"gateway/internal/response"
 	"gateway/internal/security"
 
 	"github.com/gin-gonic/gin"
@@ -64,6 +66,14 @@ func TestRequireAuth_RejectsRevokedToken(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeUnauthorized {
+		t.Fatalf("expected business code %d, got %d", response.CodeUnauthorized, got)
 	}
 }
 

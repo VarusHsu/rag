@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gateway/internal/middleware"
+	"gateway/internal/response"
 	"gateway/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +36,7 @@ type loginRequest struct {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
+		writeError(c, http.StatusBadRequest, response.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -51,26 +52,25 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrConflict):
-			writeError(c, http.StatusConflict, "username or email already exists")
+			writeError(c, http.StatusConflict, response.CodeConflict, "username or email already exists")
 		case errors.Is(err, service.ErrInvalidInput):
-			writeError(c, http.StatusBadRequest, "invalid input")
+			writeError(c, http.StatusBadRequest, response.CodeInvalidParams, "invalid input")
 		default:
-			writeError(c, http.StatusInternalServerError, "register failed")
+			writeError(c, http.StatusInternalServerError, response.CodeInternalError, "register failed")
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"request_id": middleware.GetRequestID(c),
-		"token":      result.Token,
-		"user":       result.User,
+	writeSuccess(c, http.StatusCreated, gin.H{
+		"token": result.Token,
+		"user":  result.User,
 	})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusBadRequest, err.Error())
+		writeError(c, http.StatusBadRequest, response.CodeInvalidParams, err.Error())
 		return
 	}
 
@@ -84,19 +84,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCredentials):
-			writeError(c, http.StatusUnauthorized, "invalid email or password")
+			writeError(c, http.StatusUnauthorized, response.CodeInvalidCredentials, "invalid email or password")
 		case errors.Is(err, service.ErrInvalidInput):
-			writeError(c, http.StatusBadRequest, "invalid input")
+			writeError(c, http.StatusBadRequest, response.CodeInvalidParams, "invalid input")
 		default:
-			writeError(c, http.StatusInternalServerError, "login failed")
+			writeError(c, http.StatusInternalServerError, response.CodeInternalError, "login failed")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"request_id": middleware.GetRequestID(c),
-		"token":      result.Token,
-		"user":       result.User,
+	writeSuccess(c, http.StatusOK, gin.H{
+		"token": result.Token,
+		"user":  result.User,
 	})
 }
 
@@ -108,22 +107,14 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrUnauthorized):
-			writeError(c, http.StatusUnauthorized, "unauthorized")
+			writeError(c, http.StatusUnauthorized, response.CodeUnauthorized, "unauthorized")
 		default:
-			writeError(c, http.StatusInternalServerError, "logout failed")
+			writeError(c, http.StatusInternalServerError, response.CodeInternalError, "logout failed")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"request_id": middleware.GetRequestID(c),
-		"message":    "logout success",
-	})
-}
-
-func writeError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{
-		"error":      message,
-		"request_id": middleware.GetRequestID(c),
+	writeSuccess(c, http.StatusOK, gin.H{
+		"message": "logout success",
 	})
 }
