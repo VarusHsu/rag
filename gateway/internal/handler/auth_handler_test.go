@@ -1,0 +1,169 @@
+package handler
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"gateway/internal/model"
+	"gateway/internal/repository"
+	"gateway/internal/security"
+	"gateway/internal/service"
+
+	"github.com/gin-gonic/gin"
+)
+
+type mockUserRepo struct {
+	createFn          func(ctx context.Context, input repository.CreateUserParams) (*model.User, error)
+	getByEmailFn      func(ctx context.Context, email string) (*model.User, error)
+	updateLastLoginFn func(ctx context.Context, userID string, at time.Time) error
+}
+
+func (m *mockUserRepo) Create(ctx context.Context, input repository.CreateUserParams) (*model.User, error) {
+	if m.createFn == nil {
+		return nil, repository.ErrUserNotFound
+	}
+	return m.createFn(ctx, input)
+}
+
+func (m *mockUserRepo) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	if m.getByEmailFn == nil {
+		return nil, repository.ErrUserNotFound
+	}
+	return m.getByEmailFn(ctx, email)
+}
+
+func (m *mockUserRepo) UpdateLastLogin(ctx context.Context, userID string, at time.Time) error {
+	if m.updateLastLoginFn == nil {
+		return nil
+	}
+	return m.updateLastLoginFn(ctx, userID, at)
+}
+
+func newTestAuthHandler(repo repository.UserRepository) *AuthHandler {
+	jwt := security.NewJWTManager("test-secret", 60)
+	svc := service.NewAuthService(repo, jwt)
+	return NewAuthHandler(svc)
+}
+
+func TestAuthHandler_RegisterValidationError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := newTestAuthHandler(&mockUserRepo{})
+	r.POST("/register", h.Register)
+
+	body := `{"username":"alice","email":"alice@example.com","password":"123"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAuthHandler_RegisterSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	repo := &mockUserRepo{
+		createFn: func(ctx context.Context, input repository.CreateUserParams) (*model.User, error) {
+			return &model.User{
+				ID:            "u1",
+				Username:      input.Username,
+				Email:         input.Email,
+				PasswordHash:  input.PasswordHash,
+				EmailVerified: false,
+				Role:          "user",
+				Status:        "active",
+			}, nil
+		},
+	}
+	h := newTestAuthHandler(repo)
+	r.POST("/register", h.Register)
+
+	body := `{"username":"alice","email":"alice@example.com","password":"12345678"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if resp["token"] == "" {
+		t.Fatal("expected token in response")
+	}
+}
+
+func TestAuthHandler_LoginUnauthorized(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	repo := &mockUserRepo{
+		getByEmailFn: func(ctx context.Context, email string) (*model.User, error) {
+			return nil, repository.ErrUserNotFound
+		},
+	}
+	h := newTestAuthHandler(repo)
+	r.POST("/login", h.Login)
+
+	body := `{"email":"alice@example.com","password":"12345678"}`
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAuthHandler_LoginSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	hash, err := security.HashPassword("12345678")
+	if err != nil {
+		t.Fatalf("HashPassword() error = %v", err)
+	}
+
+	repo := &mockUserRepo{
+		getByEmailFn: func(ctx context.Context, email string) (*model.User, error) {
+			return &model.User{
+				ID:           "u1",
+				Username:     "alice",
+				Email:        "alice@example.com",
+				PasswordHash: hash,
+				Role:         "user",
+				Status:       "active",
+			}, nil
+		},
+		updateLastLoginFn: func(ctx context.Context, userID string, at time.Time) error {
+			return nil
+		},
+	}
+	h := newTestAuthHandler(repo)
+	r.POST("/login", h.Login)
+
+	body := `{"email":"alice@example.com","password":"12345678"}`
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
