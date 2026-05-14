@@ -15,6 +15,7 @@ import (
 
 func New(
 	authHandler *handler.AuthHandler,
+	fileHandler *handler.FileHandler,
 	jwtManager *security.JWTManager,
 	tokenRevoker security.TokenRevoker,
 ) *gin.Engine {
@@ -41,6 +42,12 @@ func New(
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/logout", middleware.RequireAuth(jwtManager, tokenRevoker), authHandler.Logout)
+	}
+
+	files := v1.Group("/files")
+	files.Use(middleware.RequireAuth(jwtManager, tokenRevoker))
+	{
+		files.POST("/presign-upload", fileHandler.CreateUpload)
 	}
 
 	return r

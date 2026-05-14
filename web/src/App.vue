@@ -8,11 +8,13 @@ http.useRequest(withRequestID)
 
 const activeTab = ref('login')
 const loading = ref(false)
+const uploading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const lastRequestId = ref('')
 const token = ref(localStorage.getItem('auth_token') || '')
 const user = ref(loadUser())
+const activePage = ref(token.value ? 'upload' : 'auth')
 
 const loginForm = ref({
   email: '',
@@ -25,6 +27,9 @@ const registerForm = ref({
   phone: '',
   password: ''
 })
+
+const selectedFile = ref(null)
+const uploadInfo = ref(null)
 
 const isLoggedIn = computed(() => Boolean(token.value))
 
@@ -56,6 +61,7 @@ async function submitLogin() {
     localStorage.setItem('auth_token', data.token)
     localStorage.setItem('auth_user', JSON.stringify(data.user))
     successMsg.value = `Welcome back, ${data.user.username}!`
+    activePage.value = 'upload'
   } catch (err) {
     errorMsg.value = err.message || 'Login failed'
     lastRequestId.value = err.requestId || ''
@@ -82,12 +88,66 @@ async function submitRegister() {
     localStorage.setItem('auth_token', data.token)
     localStorage.setItem('auth_user', JSON.stringify(data.user))
     successMsg.value = `Register success, ${data.user.username}`
-    activeTab.value = 'login'
+    activePage.value = 'upload'
   } catch (err) {
     errorMsg.value = err.message || 'Register failed'
     lastRequestId.value = err.requestId || ''
   } finally {
     loading.value = false
+  }
+}
+
+function onFileChange(event) {
+  const file = event.target.files?.[0] || null
+  selectedFile.value = file
+  uploadInfo.value = null
+}
+
+async function submitUpload() {
+  clearMessage()
+  uploadInfo.value = null
+
+  if (!selectedFile.value) {
+    errorMsg.value = 'Please choose a file first'
+    return
+  }
+
+  uploading.value = true
+  try {
+    const file = selectedFile.value
+    const { data, requestId } = await http.post(
+      '/api/v1/files/presign-upload',
+      {
+        file_name: file.name,
+        content_type: file.type || 'application/octet-stream',
+        file_size: file.size
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token.value}`
+        }
+      }
+    )
+    lastRequestId.value = requestId || ''
+
+    const putRes = await fetch(data.upload_url, {
+      method: data.upload_method || 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream'
+      },
+      body: file
+    })
+    if (!putRes.ok) {
+      throw new Error(`Object upload failed with status ${putRes.status}`)
+    }
+
+    uploadInfo.value = data
+    successMsg.value = 'File uploaded successfully'
+  } catch (err) {
+    errorMsg.value = err.message || 'Upload failed'
+    lastRequestId.value = err.requestId || lastRequestId.value
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -109,8 +169,11 @@ async function logout() {
   } finally {
     token.value = ''
     user.value = null
+    selectedFile.value = null
+    uploadInfo.value = null
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
+    activePage.value = 'auth'
     loading.value = false
   }
 }
@@ -126,14 +189,32 @@ async function logout() {
       <p v-if="successMsg" class="alert success">{{ successMsg }}</p>
       <p v-if="lastRequestId" class="trace-id">request_id: {{ lastRequestId }}</p>
 
-      <template v-if="isLoggedIn && user">
+      <template v-if="isLoggedIn && user && activePage === 'upload'">
         <div class="profile">
           <p><strong>User:</strong> {{ user.username }}</p>
           <p><strong>Email:</strong> {{ user.email }}</p>
           <p><strong>Role:</strong> {{ user.role }}</p>
           <p><strong>Status:</strong> {{ user.status }}</p>
         </div>
-        <button class="btn" @click="logout">Logout</button>
+
+        <div class="upload-panel">
+          <h3>Upload File</h3>
+          <label>
+            Choose File
+            <input type="file" @change="onFileChange" />
+          </label>
+          <button class="btn" :disabled="uploading" @click="submitUpload">
+            {{ uploading ? 'Uploading...' : 'Upload' }}
+          </button>
+        </div>
+
+        <div v-if="uploadInfo" class="upload-result">
+          <p><strong>File ID:</strong> {{ uploadInfo.file_id }}</p>
+          <p><strong>Bucket:</strong> {{ uploadInfo.bucket }}</p>
+          <p><strong>Object Key:</strong> {{ uploadInfo.object_key }}</p>
+        </div>
+
+        <button class="btn btn-danger" :disabled="loading" @click="logout">Logout</button>
       </template>
 
       <template v-else>

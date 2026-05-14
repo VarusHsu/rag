@@ -23,6 +23,7 @@ All APIs return a unified envelope:
 - `POST /api/v1/auth/register` for registration
 - `POST /api/v1/auth/login` for authentication
 - `POST /api/v1/auth/logout` for logout and token revocation
+- `POST /api/v1/files/presign-upload` for presigned upload URL generation
 - Password hashing with bcrypt
 - JWT token generation
 - PostgreSQL user repository
@@ -41,10 +42,11 @@ All APIs return a unified envelope:
 cp .env.example .env
 ```
 
-2. Create the `users` table:
+2. Create database tables:
 
 ```bash
 psql "$DATABASE_URL" -f migrations/001_create_users.sql
+psql "$DATABASE_URL" -f migrations/002_create_file_metadata.sql
 ```
 
 3. Run service:
@@ -83,6 +85,17 @@ curl -X POST http://localhost:8080/api/v1/auth/logout \
   -H 'Authorization: Bearer <your-jwt-token>' \
   -H 'X-Request-Id: req-demo-logout-001'
 ```
+
+### Presigned Upload URL
+
+```bash
+curl -X POST http://localhost:8080/api/v1/files/presign-upload \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-jwt-token>' \
+  -d '{"file_name":"resume.pdf","content_type":"application/pdf","file_size":12345}'
+```
+
+Use `data.upload_url` with `PUT` to upload bytes directly to MinIO from frontend.
 
 ## Test
 

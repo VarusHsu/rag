@@ -1,6 +1,6 @@
 # Web (Vue)
 
-Simple Vue 3 page for register/login against gateway auth APIs.
+Simple Vue 3 page for register/login and file upload via MinIO presigned URL.
 
 ## Setup
 
@@ -32,6 +32,9 @@ The page calls:
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/files/presign-upload`
+
+After login/register, user is redirected to the upload page and can upload a file directly to object storage using the returned presigned URL.
 
 ## Tracing
 

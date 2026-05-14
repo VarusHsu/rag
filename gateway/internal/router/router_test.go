@@ -37,7 +37,8 @@ func TestHealthzReturnsEnvelope(t *testing.T) {
 	jwt := security.NewJWTManager("test-secret", 60)
 	blacklist := security.NewInMemoryTokenBlacklist()
 	authHandler := handler.NewAuthHandler(service.NewAuthService(&noopUserRepo{}, jwt, blacklist))
-	r := New(authHandler, jwt, blacklist)
+	fileHandler := handler.NewFileHandler(nil)
+	r := New(authHandler, fileHandler, jwt, blacklist)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()

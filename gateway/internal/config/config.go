@@ -12,6 +12,12 @@ type Config struct {
 	DatabaseURL      string
 	JWTSecret        string
 	JWTExpireMinutes int
+	MinIOEndpoint    string
+	MinIOAccessKey   string
+	MinIOSecretKey   string
+	MinIOBucket      string
+	MinIOUseSSL      bool
+	PresignExpireMin int
 }
 
 func Load() (Config, error) {
@@ -20,6 +26,12 @@ func Load() (Config, error) {
 		DatabaseURL:      os.Getenv("DATABASE_URL"),
 		JWTSecret:        os.Getenv("JWT_SECRET"),
 		JWTExpireMinutes: getEnvAsInt("JWT_EXPIRE_MINUTES", 120),
+		MinIOEndpoint:    os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:   os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:   os.Getenv("MINIO_SECRET_KEY"),
+		MinIOBucket:      os.Getenv("MINIO_BUCKET"),
+		MinIOUseSSL:      getEnvAsBool("MINIO_USE_SSL", false),
+		PresignExpireMin: getEnvAsInt("PRESIGN_EXPIRE_MINUTES", 15),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -28,6 +40,19 @@ func Load() (Config, error) {
 
 	if cfg.JWTSecret == "" {
 		return Config{}, fmt.Errorf("JWT_SECRET is required")
+	}
+
+	if cfg.MinIOEndpoint == "" {
+		return Config{}, fmt.Errorf("MINIO_ENDPOINT is required")
+	}
+	if cfg.MinIOAccessKey == "" {
+		return Config{}, fmt.Errorf("MINIO_ACCESS_KEY is required")
+	}
+	if cfg.MinIOSecretKey == "" {
+		return Config{}, fmt.Errorf("MINIO_SECRET_KEY is required")
+	}
+	if cfg.MinIOBucket == "" {
+		return Config{}, fmt.Errorf("MINIO_BUCKET is required")
 	}
 
 	return cfg, nil
@@ -47,6 +72,19 @@ func getEnvAsInt(key string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	value, ok := os.LookupEnv(key)
+	if !ok || value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
 	if err != nil {
 		return fallback
 	}

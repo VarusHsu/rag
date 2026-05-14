@@ -17,6 +17,7 @@ import (
 	"gateway/internal/router"
 	"gateway/internal/security"
 	"gateway/internal/service"
+	"gateway/internal/storage"
 )
 
 func main() {
@@ -46,12 +47,23 @@ func main() {
 	defer sqlDB.Close()
 
 	userRepo := repository.NewGormUserRepository(gormDB)
+	fileRepo := repository.NewGormFileRepository(gormDB)
 	jwtManager := security.NewJWTManager(cfg.JWTSecret, cfg.JWTExpireMinutes)
 	tokenBlacklist := security.NewInMemoryTokenBlacklist()
 	authService := service.NewAuthService(userRepo, jwtManager, tokenBlacklist)
 	authHandler := handler.NewAuthHandler(authService)
 
-	engine := router.New(authHandler, jwtManager, tokenBlacklist)
+	minioClient, err := storage.NewMinIOClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
+	if err != nil {
+		logx.Error("create minio client failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
+	}
+	minioUploader := storage.NewMinIOUploader(minioClient)
+	fileService := service.NewFileService(fileRepo, minioUploader, cfg.MinIOBucket, time.Duration(cfg.PresignExpireMin)*time.Minute)
+	fileHandler := handler.NewFileHandler(fileService)
+
+	engine := router.New(authHandler, fileHandler, jwtManager, tokenBlacklist)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           engine,
