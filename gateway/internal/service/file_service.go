@@ -8,12 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"gateway/internal/messaging"
 	"gateway/internal/repository"
 	"gateway/internal/security"
 	"gateway/internal/storage"
 )
 
 var ErrInvalidFileInput = errors.New("invalid file input")
+var ErrFileNotFound = errors.New("file not found")
+
+type MessagePublisher interface {
+	Publish(ctx context.Context, msg messaging.UploadMessage) error
+}
 
 type CreateUploadInput struct {
 	Claims      *security.Claims
@@ -31,9 +37,15 @@ type CreateUploadResult struct {
 	ExpiresInSecond int64  `json:"expires_in_seconds"`
 }
 
+type ConfirmUploadInput struct {
+	Claims *security.Claims
+	FileID string
+}
+
 type FileService struct {
 	files         repository.FileRepository
 	uploader      storage.PresignUploader
+	publisher     MessagePublisher
 	bucket        string
 	presignExpiry time.Duration
 }
@@ -41,10 +53,11 @@ type FileService struct {
 func NewFileService(
 	files repository.FileRepository,
 	uploader storage.PresignUploader,
+	publisher MessagePublisher,
 	bucket string,
 	presignExpiry time.Duration,
 ) *FileService {
-	return &FileService{files: files, uploader: uploader, bucket: bucket, presignExpiry: presignExpiry}
+	return &FileService{files: files, uploader: uploader, publisher: publisher, bucket: bucket, presignExpiry: presignExpiry}
 }
 
 func (s *FileService) CreateUpload(ctx context.Context, input CreateUploadInput) (*CreateUploadResult, error) {
@@ -86,6 +99,37 @@ func (s *FileService) CreateUpload(ctx context.Context, input CreateUploadInput)
 		UploadMethod:    "PUT",
 		ExpiresInSecond: int64(s.presignExpiry.Seconds()),
 	}, nil
+}
+
+func (s *FileService) ConfirmUpload(ctx context.Context, input ConfirmUploadInput) error {
+	if input.Claims == nil || strings.TrimSpace(input.Claims.UserID) == "" {
+		return ErrUnauthorized
+	}
+
+	record, err := s.files.GetByID(ctx, input.FileID)
+	if err != nil {
+		return ErrFileNotFound
+	}
+
+	if record.UserID != input.Claims.UserID {
+		return ErrUnauthorized
+	}
+
+	fileURL, err := s.uploader.PresignGetObject(ctx, record.Bucket, record.ObjectKey, 30*time.Minute)
+	if err != nil {
+		return fmt.Errorf("create presigned get url: %w", err)
+	}
+
+	return s.publisher.Publish(ctx, messaging.UploadMessage{
+		FileID:      record.ID,
+		FileName:    record.FileName,
+		ContentType: record.ContentType,
+		FileSize:    record.FileSize,
+		FileURL:     fileURL,
+		UserID:      record.UserID,
+		Bucket:      record.Bucket,
+		ObjectKey:   record.ObjectKey,
+	})
 }
 
 func buildObjectKey(userID string, fileName string) string {

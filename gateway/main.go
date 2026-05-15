@@ -13,6 +13,7 @@ import (
 	"gateway/internal/db"
 	"gateway/internal/handler"
 	"gateway/internal/logx"
+	"gateway/internal/messaging"
 	"gateway/internal/repository"
 	"gateway/internal/router"
 	"gateway/internal/security"
@@ -60,7 +61,16 @@ func main() {
 		os.Exit(1)
 	}
 	minioUploader := storage.NewMinIOUploader(minioClient)
-	fileService := service.NewFileService(fileRepo, minioUploader, cfg.MinIOBucket, time.Duration(cfg.PresignExpireMin)*time.Minute)
+
+	publisher, err := messaging.NewPublisher(cfg.RabbitMQURL, cfg.RabbitMQQueue)
+	if err != nil {
+		logx.Error("connect rabbitmq failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
+	}
+	defer publisher.Close()
+
+	fileService := service.NewFileService(fileRepo, minioUploader, publisher, cfg.MinIOBucket, time.Duration(cfg.PresignExpireMin)*time.Minute)
 	fileHandler := handler.NewFileHandler(fileService)
 
 	engine := router.New(authHandler, fileHandler, jwtManager, tokenBlacklist)

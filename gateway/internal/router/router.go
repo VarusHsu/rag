@@ -48,6 +48,7 @@ func New(
 	files.Use(middleware.RequireAuth(jwtManager, tokenRevoker))
 	{
 		files.POST("/presign-upload", fileHandler.CreateUpload)
+		files.POST("/:file_id/confirm-upload", fileHandler.ConfirmUpload)
 	}
 
 	return r

@@ -12,10 +12,12 @@ import (
 
 type PresignClient interface {
 	PresignedPutObject(ctx context.Context, bucketName string, objectName string, expires time.Duration) (*url.URL, error)
+	PresignedGetObject(ctx context.Context, bucketName string, objectName string, expires time.Duration, reqParams url.Values) (*url.URL, error)
 }
 
 type PresignUploader interface {
 	PresignPutObject(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error)
+	PresignGetObject(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error)
 }
 
 type MinIOUploader struct {
@@ -43,4 +45,12 @@ func (u *MinIOUploader) PresignPutObject(ctx context.Context, bucket string, obj
 		return "", fmt.Errorf("presign put object: %w", err)
 	}
 	return url.String(), nil
+}
+
+func (u *MinIOUploader) PresignGetObject(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error) {
+	u2, err := u.client.PresignedGetObject(ctx, bucket, objectKey, expires, nil)
+	if err != nil {
+		return "", fmt.Errorf("presign get object: %w", err)
+	}
+	return u2.String(), nil
 }

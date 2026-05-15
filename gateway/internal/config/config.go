@@ -18,6 +18,8 @@ type Config struct {
 	MinIOBucket      string
 	MinIOUseSSL      bool
 	PresignExpireMin int
+	RabbitMQURL      string
+	RabbitMQQueue    string
 }
 
 func Load() (Config, error) {
@@ -32,6 +34,8 @@ func Load() (Config, error) {
 		MinIOBucket:      os.Getenv("MINIO_BUCKET"),
 		MinIOUseSSL:      getEnvAsBool("MINIO_USE_SSL", false),
 		PresignExpireMin: getEnvAsInt("PRESIGN_EXPIRE_MINUTES", 15),
+		RabbitMQURL:      getEnv("RABBITMQ_URL", "amqp://admin:admin123456@localhost:5672/"),
+		RabbitMQQueue:    getEnv("RABBITMQ_QUEUE", "document.upload"),
 	}
 
 	if cfg.DatabaseURL == "" {

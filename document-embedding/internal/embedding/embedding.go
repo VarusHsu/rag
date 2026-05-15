@@ -22,10 +22,16 @@ type EmbeddingRequest struct {
 	Model string `json:"model"`
 }
 
+// EmbeddingResponse handles both:
+// - OpenAI /v1/embeddings: {"data": [{"embedding": [...]}]}
+// - Ollama /api/embed:     {"embeddings": [[...]]}
 type EmbeddingResponse struct {
+	// OpenAI format
 	Data []struct {
 		Embedding []float32 `json:"embedding"`
 	} `json:"data"`
+	// Ollama /api/embed format
+	Embeddings [][]float32 `json:"embeddings"`
 }
 
 func NewEmbeddingClient(baseURL, apiKey, model string) *EmbeddingClient {
@@ -54,12 +60,14 @@ func (c *EmbeddingClient) Embed(ctx context.Context, text string) ([]float32, er
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/embeddings", bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
@@ -78,9 +86,15 @@ func (c *EmbeddingClient) Embed(ctx context.Context, text string) ([]float32, er
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	if len(result.Data) == 0 {
-		return nil, fmt.Errorf("no embeddings in response")
+	// OpenAI /v1/embeddings format
+	if len(result.Data) > 0 && len(result.Data[0].Embedding) > 0 {
+		return result.Data[0].Embedding, nil
 	}
 
-	return result.Data[0].Embedding, nil
+	// Ollama /api/embed format
+	if len(result.Embeddings) > 0 && len(result.Embeddings[0]) > 0 {
+		return result.Embeddings[0], nil
+	}
+
+	return nil, fmt.Errorf("no embeddings in response")
 }

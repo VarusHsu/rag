@@ -33,6 +33,10 @@ func NewQdrantStore(host string, port int, apiKey string, collection string) (*Q
 }
 
 func (s *QdrantStore) CreateCollection(ctx context.Context, vectorSize int) error {
+	if vectorSize <= 0 {
+		return fmt.Errorf("invalid vector size: %d", vectorSize)
+	}
+
 	payload := map[string]interface{}{
 		"vectors": map[string]interface{}{
 			"size":     vectorSize,
@@ -51,9 +55,85 @@ func (s *QdrantStore) CreateCollection(ctx context.Context, vectorSize int) erro
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+
+	if resp.StatusCode == http.StatusConflict {
+		currentSize, err := s.getCollectionVectorSize(ctx)
+		if err != nil {
+			return err
+		}
+		if currentSize == vectorSize {
+			return nil
+		}
+		if err := s.deleteCollection(ctx); err != nil {
+			return err
+		}
+		return s.CreateCollection(ctx, vectorSize)
+	}
+
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("create collection failed: %d %s", resp.StatusCode, body)
+	}
+
+	return nil
+}
+
+func (s *QdrantStore) getCollectionVectorSize(ctx context.Context) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", s.baseURL+"/collections/"+s.collection, nil)
+	if err != nil {
+		return 0, fmt.Errorf("build collection info request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("get collection info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("get collection info failed: %d %s", resp.StatusCode, body)
+	}
+
+	var result struct {
+		Result struct {
+			Config struct {
+				Params struct {
+					Vectors struct {
+						Size int `json:"size"`
+					} `json:"vectors"`
+				} `json:"params"`
+			} `json:"config"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("decode collection info: %w", err)
+	}
+	if result.Result.Config.Params.Vectors.Size <= 0 {
+		return 0, fmt.Errorf("invalid collection vector size")
+	}
+
+	return result.Result.Config.Params.Vectors.Size, nil
+}
+
+func (s *QdrantStore) deleteCollection(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, "DELETE", s.baseURL+"/collections/"+s.collection, nil)
+	if err != nil {
+		return fmt.Errorf("build delete collection request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete collection: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete collection failed: %d %s", resp.StatusCode, body)
 	}
 
 	return nil

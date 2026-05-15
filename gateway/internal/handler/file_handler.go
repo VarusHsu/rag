@@ -15,6 +15,7 @@ import (
 
 type FileUploadService interface {
 	CreateUpload(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
+	ConfirmUpload(ctx context.Context, input service.ConfirmUploadInput) error
 }
 
 type FileHandler struct {
@@ -60,4 +61,33 @@ func (h *FileHandler) CreateUpload(c *gin.Context) {
 	}
 
 	writeSuccess(c, http.StatusOK, result)
+}
+
+func (h *FileHandler) ConfirmUpload(c *gin.Context) {
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		writeError(c, http.StatusBadRequest, response.CodeInvalidParams, "missing file_id")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	err := h.files.ConfirmUpload(ctx, service.ConfirmUploadInput{
+		Claims: middleware.GetClaims(c),
+		FileID: fileID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUnauthorized):
+			writeError(c, http.StatusUnauthorized, response.CodeUnauthorized, "unauthorized")
+		case errors.Is(err, service.ErrFileNotFound):
+			writeError(c, http.StatusNotFound, response.CodeInvalidParams, "file not found")
+		default:
+			writeError(c, http.StatusInternalServerError, response.CodeInternalError, "confirm upload failed")
+		}
+		return
+	}
+
+	writeSuccess(c, http.StatusOK, gin.H{"message": "vectorization started"})
 }

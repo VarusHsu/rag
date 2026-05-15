@@ -45,7 +45,7 @@ func main() {
 	defer vectorStore.Close()
 
 	ctx := context.Background()
-	if err := vectorStore.CreateCollection(ctx, 1536); err != nil {
+	if err := vectorStore.CreateCollection(ctx, cfg.EmbeddingDim); err != nil {
 		logger.Error("create collection", zap.Error(err))
 	}
 	logger.Info("qdrant store initialized", zap.String("collection", cfg.QdrantColl))

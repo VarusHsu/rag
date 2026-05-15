@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 
-	"document-embedding/internal/embedding"
 	"document-embedding/internal/parser"
 	"document-embedding/internal/vector"
 )
@@ -27,13 +27,21 @@ type UploadMessage struct {
 	ObjectKey   string `json:"object_key"`
 }
 
+type EmbeddingService interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
+
+type VectorStore interface {
+	UpsertVectors(ctx context.Context, records []vector.VectorRecord) error
+}
+
 type DocumentConsumer struct {
 	conn        *amqp.Connection
 	channel     *amqp.Channel
 	queue       string
 	parser      parser.DocumentParser
-	embedding   *embedding.EmbeddingClient
-	vectorStore *vector.QdrantStore
+	embedding   EmbeddingService
+	vectorStore VectorStore
 	logger      *zap.Logger
 	httpClient  *http.Client
 }
@@ -42,8 +50,8 @@ func NewDocumentConsumer(
 	conn *amqp.Connection,
 	queue string,
 	p parser.DocumentParser,
-	e *embedding.EmbeddingClient,
-	v *vector.QdrantStore,
+	e EmbeddingService,
+	v VectorStore,
 	logger *zap.Logger,
 ) (*DocumentConsumer, error) {
 	channel, err := conn.Channel()
@@ -87,9 +95,13 @@ func (c *DocumentConsumer) Start(ctx context.Context) error {
 
 			if err := c.handleMessage(ctx, msg); err != nil {
 				c.logger.Error("handle message failed", zap.Error(err))
-				msg.Nack(false, true)
+				if nackErr := msg.Nack(false, true); nackErr != nil {
+					c.logger.Error("nack message failed", zap.Error(nackErr))
+				}
 			} else {
-				msg.Ack(false)
+				if ackErr := msg.Ack(false); ackErr != nil {
+					c.logger.Error("ack message failed", zap.Error(ackErr))
+				}
 			}
 		}
 	}
@@ -121,7 +133,7 @@ func (c *DocumentConsumer) handleMessage(ctx context.Context, msg amqp.Delivery)
 		}
 
 		vectorRecords = append(vectorRecords, vector.VectorRecord{
-			ID:     fmt.Sprintf("%s-%d", uploadMsg.FileID, i),
+			ID:     buildPointID(uploadMsg.FileID, i),
 			Vector: emb,
 			Metadata: map[string]string{
 				"file_id":     uploadMsg.FileID,
@@ -144,6 +156,10 @@ func (c *DocumentConsumer) handleMessage(ctx context.Context, msg amqp.Delivery)
 	)
 
 	return nil
+}
+
+func buildPointID(fileID string, chunkIndex int) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(fmt.Sprintf("%s:%d", fileID, chunkIndex))).String()
 }
 
 func (c *DocumentConsumer) downloadFile(fileURL string) ([]byte, error) {

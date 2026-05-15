@@ -124,6 +124,12 @@ async function submitRegister() {
 
 function onFileChange(event) {
   const file = event.target.files?.[0] || null
+  if (file && !file.name.toLowerCase().endsWith('.txt')) {
+    errorMsg.value = 'Only .txt files are supported'
+    event.target.value = ''
+    selectedFile.value = null
+    return
+  }
   selectedFile.value = file
   uploadInfo.value = null
 }
@@ -144,7 +150,7 @@ async function submitUpload() {
       '/api/v1/files/presign-upload',
       {
         file_name: file.name,
-        content_type: file.type || 'application/octet-stream',
+        content_type: file.type || 'text/plain',
         file_size: file.size
       }
     )
@@ -153,7 +159,7 @@ async function submitUpload() {
     const putRes = await fetch(data.upload_url, {
       method: data.upload_method || 'PUT',
       headers: {
-        'Content-Type': file.type || 'application/octet-stream'
+        'Content-Type': file.type || 'text/plain'
       },
       body: file
     })
@@ -162,7 +168,14 @@ async function submitUpload() {
     }
 
     uploadInfo.value = data
-    successMsg.value = 'File uploaded successfully'
+
+    // Trigger vectorization
+    const { requestId: confirmReqId } = await http.post(
+      `/api/v1/files/${data.file_id}/confirm-upload`,
+      {}
+    )
+    lastRequestId.value = confirmReqId || lastRequestId.value
+    successMsg.value = 'File uploaded and vectorization started'
   } catch (err) {
     errorMsg.value = err.message || 'Upload failed'
     lastRequestId.value = err.requestId || lastRequestId.value
@@ -212,8 +225,8 @@ async function logout() {
         <div class="upload-panel">
           <h3>Upload File</h3>
           <label>
-            Choose File
-            <input type="file" @change="onFileChange" />
+            Choose .txt File
+            <input type="file" accept=".txt" @change="onFileChange" />
           </label>
           <button class="btn" :disabled="uploading" @click="submitUpload">
             {{ uploading ? 'Uploading...' : 'Upload' }}

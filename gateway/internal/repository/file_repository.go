@@ -21,6 +21,7 @@ type CreateFileMetadataParams struct {
 
 type FileRepository interface {
 	Create(ctx context.Context, input CreateFileMetadataParams) (*model.FileMetadata, error)
+	GetByID(ctx context.Context, id string) (*model.FileMetadata, error)
 }
 
 type GormFileRepository struct {
@@ -47,4 +48,12 @@ func (r *GormFileRepository) Create(ctx context.Context, input CreateFileMetadat
 	}
 
 	return record, nil
+}
+
+func (r *GormFileRepository) GetByID(ctx context.Context, id string) (*model.FileMetadata, error) {
+	var record model.FileMetadata
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
+		return nil, fmt.Errorf("get file metadata: %w", err)
+	}
+	return &record, nil
 }
