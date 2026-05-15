@@ -1,3 +1,6 @@
 .idea
 web/node_modules
 web/dist
+.env
+gateway/gateway
+document-embedding/document-embedding
