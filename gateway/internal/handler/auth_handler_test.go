@@ -97,7 +97,7 @@ func TestAuthHandler_RegisterSuccess(t *testing.T) {
 	h := newTestAuthHandler(repo)
 	r.POST("/register", h.Register)
 
-	body := `{"username":"alice","email":"alice@example.com","password":"12345678"}`
+	body := `{"username":"alice","email":"alice@example.com","password":"12345678","confirm_password":"12345678"}`
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -118,6 +118,32 @@ func TestAuthHandler_RegisterSuccess(t *testing.T) {
 	data := resp["data"].(map[string]any)
 	if data["token"] == "" {
 		t.Fatal("expected token in response")
+	}
+}
+
+func TestAuthHandler_RegisterPasswordMismatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := newTestAuthHandler(&mockUserRepo{})
+	r.POST("/register", h.Register)
+
+	body := `{"username":"alice","email":"alice@example.com","password":"12345678","confirm_password":"87654321"}`
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response error: %v", err)
+	}
+	if got := int(resp["code"].(float64)); got != response.CodeInvalidParams {
+		t.Fatalf("expected business code %d, got %d", response.CodeInvalidParams, got)
 	}
 }
 
@@ -217,7 +243,7 @@ func TestAuthHandler_RegisterSuccessIncludesRequestID(t *testing.T) {
 	h := newTestAuthHandler(repo)
 	r.POST("/register", h.Register)
 
-	body := `{"username":"alice","email":"alice@example.com","password":"12345678"}`
+	body := `{"username":"alice","email":"alice@example.com","password":"12345678","confirm_password":"12345678"}`
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.HeaderRequestID, "req-register-1")

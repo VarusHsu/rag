@@ -64,7 +64,7 @@ Server starts at `http://localhost:8080` by default.
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"username":"alice","email":"alice@example.com","password":"12345678","phone":"13800138000"}'
+  -d '{"username":"alice","email":"alice@example.com","password":"12345678","confirm_password":"12345678","phone":"13800138000"}'
 ```
 
 ### Login

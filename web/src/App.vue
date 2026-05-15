@@ -50,7 +50,8 @@ const registerForm = ref({
   username: '',
   email: '',
   phone: '',
-  password: ''
+  password: '',
+  confirmPassword: ''
 })
 
 const selectedFile = ref(null)
@@ -97,10 +98,19 @@ async function submitLogin() {
 
 async function submitRegister() {
   clearMessage()
+
+  if (registerForm.value.password !== registerForm.value.confirmPassword) {
+    errorMsg.value = 'Passwords do not match'
+    return
+  }
+
   loading.value = true
 
   const payload = {
-    ...registerForm.value,
+    username: registerForm.value.username,
+    email: registerForm.value.email,
+    password: registerForm.value.password,
+    confirm_password: registerForm.value.confirmPassword,
     phone: registerForm.value.phone || null
   }
 
@@ -295,6 +305,11 @@ async function logout() {
           <label>
             Password
             <input v-model="registerForm.password" type="password" minlength="8" required />
+          </label>
+
+          <label>
+            Confirm Password
+            <input v-model="registerForm.confirmPassword" type="password" minlength="8" required />
           </label>
 
           <button class="btn" type="submit" :disabled="loading">

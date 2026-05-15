@@ -22,10 +22,11 @@ func NewAuthHandler(auth *service.AuthService) *AuthHandler {
 }
 
 type registerRequest struct {
-	Username string  `json:"username" binding:"required"`
-	Email    string  `json:"email" binding:"required,email"`
-	Phone    *string `json:"phone"`
-	Password string  `json:"password" binding:"required,min=8"`
+	Username        string  `json:"username" binding:"required"`
+	Email           string  `json:"email" binding:"required,email"`
+	Phone           *string `json:"phone"`
+	Password        string  `json:"password" binding:"required,min=8"`
+	ConfirmPassword string  `json:"confirm_password" binding:"required"`
 }
 
 type loginRequest struct {
@@ -37,6 +38,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, response.CodeInvalidParams, err.Error())
+		return
+	}
+	if req.Password != req.ConfirmPassword {
+		writeError(c, http.StatusBadRequest, response.CodeInvalidParams, "passwords do not match")
 		return
 	}
 

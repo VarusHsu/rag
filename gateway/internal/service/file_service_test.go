@@ -13,8 +13,9 @@ import (
 )
 
 type mockFileRepo struct {
-	createFn  func(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error)
-	getByIDFn func(ctx context.Context, id string) (*model.FileMetadata, error)
+	createFn       func(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error)
+	getByIDFn      func(ctx context.Context, id string) (*model.FileMetadata, error)
+	updateStatusFn func(ctx context.Context, id string, status string) error
 }
 
 func (m *mockFileRepo) Create(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error) {
@@ -29,6 +30,13 @@ func (m *mockFileRepo) GetByID(ctx context.Context, id string) (*model.FileMetad
 		return nil, errors.New("getByIDFn not implemented")
 	}
 	return m.getByIDFn(ctx, id)
+}
+
+func (m *mockFileRepo) UpdateStatus(ctx context.Context, id string, status string) error {
+	if m.updateStatusFn == nil {
+		return nil
+	}
+	return m.updateStatusFn(ctx, id, status)
 }
 
 type mockPresignUploader struct {
