@@ -44,6 +44,7 @@ type DocumentConsumer struct {
 	vectorStore VectorStore
 	logger      *zap.Logger
 	httpClient  *http.Client
+	publisher   *CompletionPublisher
 }
 
 func NewDocumentConsumer(
@@ -53,6 +54,7 @@ func NewDocumentConsumer(
 	e EmbeddingService,
 	v VectorStore,
 	logger *zap.Logger,
+	publisher *CompletionPublisher,
 ) (*DocumentConsumer, error) {
 	channel, err := conn.Channel()
 	if err != nil {
@@ -73,6 +75,7 @@ func NewDocumentConsumer(
 		vectorStore: v,
 		logger:      logger,
 		httpClient:  &http.Client{Timeout: 5 * time.Minute},
+		publisher:   publisher,
 	}, nil
 }
 
@@ -155,6 +158,20 @@ func (c *DocumentConsumer) handleMessage(ctx context.Context, msg amqp.Delivery)
 		zap.Int("chunks", len(vectorRecords)),
 	)
 
+	// Publish completion message
+	if err := c.publisher.Publish(ctx, EmbeddingCompletedMessage{
+		FileID:     uploadMsg.FileID,
+		UserID:     uploadMsg.UserID,
+		Status:     "embedded",
+		ChunkCount: len(vectorRecords),
+	}); err != nil {
+		c.logger.Error("publish completion message failed",
+			zap.String("file_id", uploadMsg.FileID),
+			zap.Error(err),
+		)
+		// Don't return error here - we've already successfully embedded the document
+	}
+
 	return nil
 }
 
@@ -184,6 +201,9 @@ func (c *DocumentConsumer) downloadFile(fileURL string) ([]byte, error) {
 func (c *DocumentConsumer) Close() error {
 	if c.channel != nil {
 		_ = c.channel.Close()
+	}
+	if c.publisher != nil {
+		_ = c.publisher.Close()
 	}
 	return nil
 }

@@ -55,6 +55,12 @@ func main() {
 
 	docParser := parser.NewSimpleParser()
 
+	completionPublisher, err := consumer.NewCompletionPublisher(conn, cfg.RabbitMQCompletionQueue)
+	if err != nil {
+		logger.Fatal("create completion publisher", zap.Error(err))
+	}
+	defer completionPublisher.Close()
+
 	docConsumer, err := consumer.NewDocumentConsumer(
 		conn,
 		cfg.RabbitMQQueue,
@@ -62,6 +68,7 @@ func main() {
 		embeddingClient,
 		vectorStore,
 		logger,
+		completionPublisher,
 	)
 	if err != nil {
 		logger.Fatal("create consumer", zap.Error(err))

@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
+
 	"gateway/internal/config"
 	"gateway/internal/db"
 	"gateway/internal/handler"
@@ -70,6 +72,22 @@ func main() {
 	}
 	defer publisher.Close()
 
+	embeddingCompletionConn, err := amqp.Dial(cfg.RabbitMQURL)
+	if err != nil {
+		logx.Error("connect rabbitmq for embedding completion failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
+	}
+	defer embeddingCompletionConn.Close()
+
+	embeddingConsumer, err := messaging.NewEmbeddingConsumer(embeddingCompletionConn, cfg.RabbitMQCompletionQueue, fileRepo)
+	if err != nil {
+		logx.Error("create embedding consumer failed", logx.Fields{"error": err.Error()})
+		logx.Sync()
+		os.Exit(1)
+	}
+	defer embeddingConsumer.Close()
+
 	fileService := service.NewFileService(fileRepo, minioUploader, publisher, cfg.MinIOBucket, time.Duration(cfg.PresignExpireMin)*time.Minute)
 	fileHandler := handler.NewFileHandler(fileService)
 
@@ -79,6 +97,12 @@ func main() {
 		Handler:           engine,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	go func() {
+		if err := embeddingConsumer.Start(ctx); err != nil && err != context.Canceled {
+			logx.Error("embedding consumer error", logx.Fields{"error": err.Error()})
+		}
+	}()
 
 	go func() {
 		logx.Info("gateway listening", logx.Fields{"port": cfg.Port})

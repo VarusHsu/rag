@@ -8,36 +8,38 @@ import (
 
 // Config stores runtime configuration values.
 type Config struct {
-	Port             string
-	DatabaseURL      string
-	JWTSecret        string
-	JWTExpireMinutes int
-	MinIOEndpoint    string
-	MinIOPublicURL   string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
-	MinIOBucket      string
-	MinIOUseSSL      bool
-	PresignExpireMin int
-	RabbitMQURL      string
-	RabbitMQQueue    string
+	Port                    string
+	DatabaseURL             string
+	JWTSecret               string
+	JWTExpireMinutes        int
+	MinIOEndpoint           string
+	MinIOPublicURL          string
+	MinIOAccessKey          string
+	MinIOSecretKey          string
+	MinIOBucket             string
+	MinIOUseSSL             bool
+	PresignExpireMin        int
+	RabbitMQURL             string
+	RabbitMQQueue           string
+	RabbitMQCompletionQueue string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:             getEnv("PORT", "8080"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		JWTSecret:        os.Getenv("JWT_SECRET"),
-		JWTExpireMinutes: getEnvAsInt("JWT_EXPIRE_MINUTES", 120),
-		MinIOEndpoint:    os.Getenv("MINIO_ENDPOINT"),
-		MinIOPublicURL:   getEnv("MINIO_PUBLIC_URL", ""),
-		MinIOAccessKey:   os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey:   os.Getenv("MINIO_SECRET_KEY"),
-		MinIOBucket:      os.Getenv("MINIO_BUCKET"),
-		MinIOUseSSL:      getEnvAsBool("MINIO_USE_SSL", false),
-		PresignExpireMin: getEnvAsInt("PRESIGN_EXPIRE_MINUTES", 15),
-		RabbitMQURL:      getEnv("RABBITMQ_URL", "amqp://admin:admin123456@localhost:5672/"),
-		RabbitMQQueue:    getEnv("RABBITMQ_QUEUE", "document.upload"),
+		Port:                    getEnv("PORT", "8080"),
+		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		JWTExpireMinutes:        getEnvAsInt("JWT_EXPIRE_MINUTES", 120),
+		MinIOEndpoint:           os.Getenv("MINIO_ENDPOINT"),
+		MinIOPublicURL:          getEnv("MINIO_PUBLIC_URL", ""),
+		MinIOAccessKey:          os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:          os.Getenv("MINIO_SECRET_KEY"),
+		MinIOBucket:             os.Getenv("MINIO_BUCKET"),
+		MinIOUseSSL:             getEnvAsBool("MINIO_USE_SSL", false),
+		PresignExpireMin:        getEnvAsInt("PRESIGN_EXPIRE_MINUTES", 15),
+		RabbitMQURL:             getEnv("RABBITMQ_URL", "amqp://admin:admin123456@localhost:5672/"),
+		RabbitMQQueue:           getEnv("RABBITMQ_QUEUE", "document.upload"),
+		RabbitMQCompletionQueue: getEnv("RABBITMQ_COMPLETION_QUEUE", "document.embedding.completed"),
 	}
 
 	if cfg.DatabaseURL == "" {

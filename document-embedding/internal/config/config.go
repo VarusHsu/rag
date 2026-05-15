@@ -8,34 +8,36 @@ import (
 )
 
 type Config struct {
-	RabbitMQURL    string
-	RabbitMQQueue  string
-	QdrantHost     string
-	QdrantPort     int
-	QdrantAPIKey   string
-	QdrantColl     string
-	EmbeddingURL   string
-	EmbeddingKey   string
-	EmbeddingModel string
-	EmbeddingDim   int
-	LogLevel       string
+	RabbitMQURL             string
+	RabbitMQQueue           string
+	RabbitMQCompletionQueue string
+	QdrantHost              string
+	QdrantPort              int
+	QdrantAPIKey            string
+	QdrantColl              string
+	EmbeddingURL            string
+	EmbeddingKey            string
+	EmbeddingModel          string
+	EmbeddingDim            int
+	LogLevel                string
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		RabbitMQURL:    getEnv("RABBITMQ_URL", "amqp://admin:admin123456@localhost:5672/"),
-		RabbitMQQueue:  getEnv("RABBITMQ_QUEUE", "document.upload"),
-		QdrantHost:     getEnv("QDRANT_HOST", "localhost"),
-		QdrantPort:     getEnvAsInt("QDRANT_PORT", 6333),
-		QdrantAPIKey:   getEnv("QDRANT_API_KEY", ""),
-		QdrantColl:     getEnv("QDRANT_COLLECTION", "documents"),
-		EmbeddingURL:   os.Getenv("EMBEDDING_API_URL"),
-		EmbeddingKey:   getEnv("EMBEDDING_API_KEY", ""),
-		EmbeddingModel: getEnv("EMBEDDING_MODEL", "bge-m3"),
-		EmbeddingDim:   getEnvAsInt("EMBEDDING_DIM", 1024),
-		LogLevel:       getEnv("LOG_LEVEL", "info"),
+		RabbitMQURL:             getEnv("RABBITMQ_URL", "amqp://admin:admin123456@localhost:5672/"),
+		RabbitMQQueue:           getEnv("RABBITMQ_QUEUE", "document.upload"),
+		RabbitMQCompletionQueue: getEnv("RABBITMQ_COMPLETION_QUEUE", "document.embedding.completed"),
+		QdrantHost:              getEnv("QDRANT_HOST", "localhost"),
+		QdrantPort:              getEnvAsInt("QDRANT_PORT", 6333),
+		QdrantAPIKey:            getEnv("QDRANT_API_KEY", ""),
+		QdrantColl:              getEnv("QDRANT_COLLECTION", "documents"),
+		EmbeddingURL:            os.Getenv("EMBEDDING_API_URL"),
+		EmbeddingKey:            getEnv("EMBEDDING_API_KEY", ""),
+		EmbeddingModel:          getEnv("EMBEDDING_MODEL", "bge-m3"),
+		EmbeddingDim:            getEnvAsInt("EMBEDDING_DIM", 1024),
+		LogLevel:                getEnv("LOG_LEVEL", "info"),
 	}
 
 	if cfg.EmbeddingURL == "" {
