@@ -18,7 +18,8 @@ import (
 )
 
 type mockFileUploadService struct {
-	createUploadFn func(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
+	createUploadFn  func(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
+	confirmUploadFn func(ctx context.Context, input service.ConfirmUploadInput) error
 }
 
 func (m *mockFileUploadService) CreateUpload(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error) {
@@ -26,6 +27,13 @@ func (m *mockFileUploadService) CreateUpload(ctx context.Context, input service.
 		return nil, errors.New("createUploadFn not implemented")
 	}
 	return m.createUploadFn(ctx, input)
+}
+
+func (m *mockFileUploadService) ConfirmUpload(ctx context.Context, input service.ConfirmUploadInput) error {
+	if m.confirmUploadFn == nil {
+		return nil
+	}
+	return m.confirmUploadFn(ctx, input)
 }
 
 func TestFileHandler_CreateUploadSuccess(t *testing.T) {
@@ -90,5 +98,35 @@ func TestFileHandler_CreateUploadUnauthorized(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestFileHandler_ConfirmUploadSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewFileHandler(&mockFileUploadService{confirmUploadFn: func(ctx context.Context, input service.ConfirmUploadInput) error {
+		if input.FileID != "f1" {
+			t.Fatalf("expected file id f1, got %s", input.FileID)
+		}
+		if input.Claims == nil || input.Claims.UserID != "u1" {
+			t.Fatalf("expected claims user u1, got %#v", input.Claims)
+		}
+		return nil
+	}})
+
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	r.Use(func(c *gin.Context) {
+		c.Set(middleware.ContextClaims, &security.Claims{UserID: "u1"})
+		c.Next()
+	})
+	r.POST("/files/:file_id/confirm-upload", h.ConfirmUpload)
+
+	req := httptest.NewRequest(http.MethodPost, "/files/f1/confirm-upload", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
 	}
 }

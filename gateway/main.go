@@ -60,7 +60,7 @@ func main() {
 		logx.Sync()
 		os.Exit(1)
 	}
-	minioUploader := storage.NewMinIOUploader(minioClient)
+	minioUploader := storage.NewMinIOUploader(minioClient, cfg.MinIOPublicURL)
 
 	publisher, err := messaging.NewPublisher(cfg.RabbitMQURL, cfg.RabbitMQQueue)
 	if err != nil {

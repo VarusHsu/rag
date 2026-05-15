@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -21,7 +22,8 @@ type PresignUploader interface {
 }
 
 type MinIOUploader struct {
-	client PresignClient
+	client        PresignClient
+	publicBaseURL string
 }
 
 func NewMinIOClient(endpoint, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
@@ -35,16 +37,23 @@ func NewMinIOClient(endpoint, accessKey, secretKey string, useSSL bool) (*minio.
 	return client, nil
 }
 
-func NewMinIOUploader(client PresignClient) *MinIOUploader {
-	return &MinIOUploader{client: client}
+func NewMinIOUploader(client PresignClient, publicBaseURL string) *MinIOUploader {
+	return &MinIOUploader{client: client, publicBaseURL: strings.TrimSpace(publicBaseURL)}
 }
 
 func (u *MinIOUploader) PresignPutObject(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error) {
-	url, err := u.client.PresignedPutObject(ctx, bucket, objectKey, expires)
+	presignedURL, err := u.client.PresignedPutObject(ctx, bucket, objectKey, expires)
 	if err != nil {
 		return "", fmt.Errorf("presign put object: %w", err)
 	}
-	return url.String(), nil
+	if u.publicBaseURL == "" {
+		return presignedURL.String(), nil
+	}
+	rewrittenURL, err := rewritePresignedURL(presignedURL, u.publicBaseURL)
+	if err != nil {
+		return "", err
+	}
+	return rewrittenURL, nil
 }
 
 func (u *MinIOUploader) PresignGetObject(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error) {
@@ -53,4 +62,23 @@ func (u *MinIOUploader) PresignGetObject(ctx context.Context, bucket string, obj
 		return "", fmt.Errorf("presign get object: %w", err)
 	}
 	return u2.String(), nil
+}
+
+func rewritePresignedURL(source *url.URL, publicBaseURL string) (string, error) {
+	base, err := url.Parse(publicBaseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse MINIO_PUBLIC_URL: %w", err)
+	}
+	if base.Scheme == "" || base.Host == "" {
+		return "", fmt.Errorf("MINIO_PUBLIC_URL must include scheme and host")
+	}
+
+	rewritten := *source
+	rewritten.Scheme = base.Scheme
+	rewritten.Host = base.Host
+	if base.Path != "" && base.Path != "/" {
+		rewritten.Path = strings.TrimRight(base.Path, "/") + source.Path
+	}
+
+	return rewritten.String(), nil
 }

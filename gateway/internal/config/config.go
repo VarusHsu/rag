@@ -13,6 +13,7 @@ type Config struct {
 	JWTSecret        string
 	JWTExpireMinutes int
 	MinIOEndpoint    string
+	MinIOPublicURL   string
 	MinIOAccessKey   string
 	MinIOSecretKey   string
 	MinIOBucket      string
@@ -29,6 +30,7 @@ func Load() (Config, error) {
 		JWTSecret:        os.Getenv("JWT_SECRET"),
 		JWTExpireMinutes: getEnvAsInt("JWT_EXPIRE_MINUTES", 120),
 		MinIOEndpoint:    os.Getenv("MINIO_ENDPOINT"),
+		MinIOPublicURL:   getEnv("MINIO_PUBLIC_URL", ""),
 		MinIOAccessKey:   os.Getenv("MINIO_ACCESS_KEY"),
 		MinIOSecretKey:   os.Getenv("MINIO_SECRET_KEY"),
 		MinIOBucket:      os.Getenv("MINIO_BUCKET"),
