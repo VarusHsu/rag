@@ -16,6 +16,7 @@ import (
 
 var ErrInvalidFileInput = errors.New("invalid file input")
 var ErrFileNotFound = errors.New("file not found")
+var ErrForbidden = errors.New("forbidden")
 
 type MessagePublisher interface {
 	Publish(ctx context.Context, msg messaging.UploadMessage) error
@@ -40,6 +41,18 @@ type CreateUploadResult struct {
 type ConfirmUploadInput struct {
 	Claims *security.Claims
 	FileID string
+}
+
+type CompensateEmbeddingInput struct {
+	Claims *security.Claims
+	Limit  int
+}
+
+type CompensateEmbeddingResult struct {
+	Scanned       int      `json:"scanned"`
+	Requeued      int      `json:"requeued"`
+	Failed        int      `json:"failed"`
+	FailedFileIDs []string `json:"failed_file_ids"`
 }
 
 type FileService struct {
@@ -130,6 +143,55 @@ func (s *FileService) ConfirmUpload(ctx context.Context, input ConfirmUploadInpu
 		Bucket:      record.Bucket,
 		ObjectKey:   record.ObjectKey,
 	})
+}
+
+func (s *FileService) CompensateEmbedding(ctx context.Context, input CompensateEmbeddingInput) (*CompensateEmbeddingResult, error) {
+	if input.Claims == nil || strings.TrimSpace(input.Claims.UserID) == "" {
+		return nil, ErrUnauthorized
+	}
+	if input.Claims.Role != "admin" {
+		return nil, ErrForbidden
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 200
+	}
+
+	records, err := s.files.ListNonEmbeddedText(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &CompensateEmbeddingResult{Scanned: len(records)}
+	for _, record := range records {
+		fileURL, presignErr := s.uploader.PresignGetObject(ctx, record.Bucket, record.ObjectKey, 30*time.Minute)
+		if presignErr != nil {
+			result.Failed++
+			result.FailedFileIDs = append(result.FailedFileIDs, record.ID)
+			continue
+		}
+
+		publishErr := s.publisher.Publish(ctx, messaging.UploadMessage{
+			FileID:      record.ID,
+			FileName:    record.FileName,
+			ContentType: record.ContentType,
+			FileSize:    record.FileSize,
+			FileURL:     fileURL,
+			UserID:      record.UserID,
+			Bucket:      record.Bucket,
+			ObjectKey:   record.ObjectKey,
+		})
+		if publishErr != nil {
+			result.Failed++
+			result.FailedFileIDs = append(result.FailedFileIDs, record.ID)
+			continue
+		}
+
+		result.Requeued++
+	}
+
+	return result, nil
 }
 
 func buildObjectKey(userID string, fileName string) string {

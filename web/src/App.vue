@@ -132,16 +132,38 @@ async function submitRegister() {
   }
 }
 
-function onFileChange(event) {
+async function onFileChange(event) {
   const file = event.target.files?.[0] || null
-  if (file && !file.name.toLowerCase().endsWith('.txt')) {
-    errorMsg.value = 'Only .txt files are supported'
-    event.target.value = ''
-    selectedFile.value = null
-    return
+  if (file) {
+    const isASCII = await isASCIIFile(file)
+    if (!isASCII) {
+      errorMsg.value = 'Only ASCII files are supported'
+      event.target.value = ''
+      selectedFile.value = null
+      return
+    }
   }
+
+  clearMessage()
   selectedFile.value = file
   uploadInfo.value = null
+}
+
+async function isASCIIFile(file) {
+  try {
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+
+    for (const b of bytes) {
+      if (b > 0x7f) {
+        return false
+      }
+    }
+
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function submitUpload() {
@@ -235,8 +257,8 @@ async function logout() {
         <div class="upload-panel">
           <h3>Upload File</h3>
           <label>
-            Choose .txt File
-            <input type="file" accept=".txt" @change="onFileChange" />
+            Choose ASCII File
+            <input type="file" @change="onFileChange" />
           </label>
           <button class="btn" :disabled="uploading" @click="submitUpload">
             {{ uploading ? 'Uploading...' : 'Upload' }}

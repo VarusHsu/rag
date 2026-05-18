@@ -13,9 +13,10 @@ import (
 )
 
 type mockFileRepo struct {
-	createFn       func(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error)
-	getByIDFn      func(ctx context.Context, id string) (*model.FileMetadata, error)
-	updateStatusFn func(ctx context.Context, id string, status string) error
+	createFn              func(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error)
+	getByIDFn             func(ctx context.Context, id string) (*model.FileMetadata, error)
+	updateStatusFn        func(ctx context.Context, id string, status string) error
+	listNonEmbeddedTextFn func(ctx context.Context, limit int) ([]model.FileMetadata, error)
 }
 
 func (m *mockFileRepo) Create(ctx context.Context, input repository.CreateFileMetadataParams) (*model.FileMetadata, error) {
@@ -37,6 +38,13 @@ func (m *mockFileRepo) UpdateStatus(ctx context.Context, id string, status strin
 		return nil
 	}
 	return m.updateStatusFn(ctx, id, status)
+}
+
+func (m *mockFileRepo) ListNonEmbeddedText(ctx context.Context, limit int) ([]model.FileMetadata, error) {
+	if m.listNonEmbeddedTextFn == nil {
+		return nil, nil
+	}
+	return m.listNonEmbeddedTextFn(ctx, limit)
 }
 
 type mockPresignUploader struct {
@@ -167,5 +175,53 @@ func TestFileService_ConfirmUploadUnauthorizedForOtherUser(t *testing.T) {
 	})
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
+
+func TestFileService_CompensateEmbeddingSuccess(t *testing.T) {
+	var published int
+	repo := &mockFileRepo{listNonEmbeddedTextFn: func(ctx context.Context, limit int) ([]model.FileMetadata, error) {
+		if limit != 2 {
+			t.Fatalf("expected limit 2, got %d", limit)
+		}
+		return []model.FileMetadata{
+			{ID: "f1", UserID: "u1", FileName: "a.txt", ContentType: "text/plain", FileSize: 10, Bucket: "files", ObjectKey: "uploads/u1/a.txt", Status: "pending_upload"},
+			{ID: "f2", UserID: "u2", FileName: "b.md", ContentType: "text/markdown", FileSize: 20, Bucket: "files", ObjectKey: "uploads/u2/b.md", Status: "failed"},
+		}, nil
+	}}
+	uploader := &mockPresignUploader{presignGetFn: func(ctx context.Context, bucket string, objectKey string, expires time.Duration) (string, error) {
+		return "http://minio.internal/" + objectKey, nil
+	}}
+	publisher := &mockPublisher{publishFn: func(ctx context.Context, uploadMsg messaging.UploadMessage) error {
+		published++
+		if uploadMsg.FileID == "" || uploadMsg.FileURL == "" {
+			t.Fatalf("unexpected publish payload: %#v", uploadMsg)
+		}
+		return nil
+	}}
+
+	svc := NewFileService(repo, uploader, publisher, "files", 15*time.Minute)
+	result, err := svc.CompensateEmbedding(context.Background(), CompensateEmbeddingInput{
+		Claims: &security.Claims{UserID: "admin-1", Role: "admin"},
+		Limit:  2,
+	})
+	if err != nil {
+		t.Fatalf("CompensateEmbedding() error = %v", err)
+	}
+	if result.Scanned != 2 || result.Requeued != 2 || result.Failed != 0 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if published != 2 {
+		t.Fatalf("expected 2 publishes, got %d", published)
+	}
+}
+
+func TestFileService_CompensateEmbeddingForbiddenForNonAdmin(t *testing.T) {
+	svc := NewFileService(&mockFileRepo{}, &mockPresignUploader{}, &mockPublisher{}, "files", 15*time.Minute)
+	_, err := svc.CompensateEmbedding(context.Background(), CompensateEmbeddingInput{
+		Claims: &security.Claims{UserID: "u1", Role: "user"},
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
 	}
 }

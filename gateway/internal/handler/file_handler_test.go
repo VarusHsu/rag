@@ -18,8 +18,9 @@ import (
 )
 
 type mockFileUploadService struct {
-	createUploadFn  func(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
-	confirmUploadFn func(ctx context.Context, input service.ConfirmUploadInput) error
+	createUploadFn    func(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
+	confirmUploadFn   func(ctx context.Context, input service.ConfirmUploadInput) error
+	compensateEmbedFn func(ctx context.Context, input service.CompensateEmbeddingInput) (*service.CompensateEmbeddingResult, error)
 }
 
 func (m *mockFileUploadService) CreateUpload(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error) {
@@ -34,6 +35,13 @@ func (m *mockFileUploadService) ConfirmUpload(ctx context.Context, input service
 		return nil
 	}
 	return m.confirmUploadFn(ctx, input)
+}
+
+func (m *mockFileUploadService) CompensateEmbedding(ctx context.Context, input service.CompensateEmbeddingInput) (*service.CompensateEmbeddingResult, error) {
+	if m.compensateEmbedFn == nil {
+		return &service.CompensateEmbeddingResult{}, nil
+	}
+	return m.compensateEmbedFn(ctx, input)
 }
 
 func TestFileHandler_CreateUploadSuccess(t *testing.T) {
@@ -122,6 +130,36 @@ func TestFileHandler_ConfirmUploadSuccess(t *testing.T) {
 	r.POST("/files/:file_id/confirm-upload", h.ConfirmUpload)
 
 	req := httptest.NewRequest(http.MethodPost, "/files/f1/confirm-upload", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestFileHandler_CompensateEmbeddingSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewFileHandler(&mockFileUploadService{compensateEmbedFn: func(ctx context.Context, input service.CompensateEmbeddingInput) (*service.CompensateEmbeddingResult, error) {
+		if input.Claims == nil || input.Claims.Role != "admin" {
+			t.Fatalf("expected admin claims, got %#v", input.Claims)
+		}
+		if input.Limit != 50 {
+			t.Fatalf("expected limit 50, got %d", input.Limit)
+		}
+		return &service.CompensateEmbeddingResult{Scanned: 10, Requeued: 9, Failed: 1, FailedFileIDs: []string{"f-bad"}}, nil
+	}})
+
+	r := gin.New()
+	r.Use(middleware.RequestTrace())
+	r.Use(func(c *gin.Context) {
+		c.Set(middleware.ContextClaims, &security.Claims{UserID: "admin-1", Role: "admin"})
+		c.Next()
+	})
+	r.POST("/files/compensate-embedding", h.CompensateEmbedding)
+
+	req := httptest.NewRequest(http.MethodPost, "/files/compensate-embedding", bytes.NewBufferString(`{"limit":50}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

@@ -16,6 +16,7 @@ import (
 type FileUploadService interface {
 	CreateUpload(ctx context.Context, input service.CreateUploadInput) (*service.CreateUploadResult, error)
 	ConfirmUpload(ctx context.Context, input service.ConfirmUploadInput) error
+	CompensateEmbedding(ctx context.Context, input service.CompensateEmbeddingInput) (*service.CompensateEmbeddingResult, error)
 }
 
 type FileHandler struct {
@@ -90,4 +91,39 @@ func (h *FileHandler) ConfirmUpload(c *gin.Context) {
 	}
 
 	writeSuccess(c, http.StatusOK, gin.H{"message": "vectorization started"})
+}
+
+type compensateEmbeddingRequest struct {
+	Limit int `json:"limit" binding:"omitempty,gte=1,lte=1000"`
+}
+
+func (h *FileHandler) CompensateEmbedding(c *gin.Context) {
+	var req compensateEmbeddingRequest
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeError(c, http.StatusBadRequest, response.CodeInvalidParams, err.Error())
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+
+	result, err := h.files.CompensateEmbedding(ctx, service.CompensateEmbeddingInput{
+		Claims: middleware.GetClaims(c),
+		Limit:  req.Limit,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUnauthorized):
+			writeError(c, http.StatusUnauthorized, response.CodeUnauthorized, "unauthorized")
+		case errors.Is(err, service.ErrForbidden):
+			writeError(c, http.StatusForbidden, response.CodeUnauthorized, "forbidden")
+		default:
+			writeError(c, http.StatusInternalServerError, response.CodeInternalError, "compensate embedding failed")
+		}
+		return
+	}
+
+	writeSuccess(c, http.StatusOK, result)
 }

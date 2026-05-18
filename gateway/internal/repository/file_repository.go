@@ -23,6 +23,7 @@ type FileRepository interface {
 	Create(ctx context.Context, input CreateFileMetadataParams) (*model.FileMetadata, error)
 	GetByID(ctx context.Context, id string) (*model.FileMetadata, error)
 	UpdateStatus(ctx context.Context, id string, status string) error
+	ListNonEmbeddedText(ctx context.Context, limit int) ([]model.FileMetadata, error)
 }
 
 type GormFileRepository struct {
@@ -64,4 +65,22 @@ func (r *GormFileRepository) UpdateStatus(ctx context.Context, id string, status
 		return fmt.Errorf("update file status: %w", err)
 	}
 	return nil
+}
+
+func (r *GormFileRepository) ListNonEmbeddedText(ctx context.Context, limit int) ([]model.FileMetadata, error) {
+	var records []model.FileMetadata
+
+	db := r.db.WithContext(ctx).
+		Where("status <> ?", "embedded").
+		Where("content_type LIKE ?", "text/%").
+		Order("created_at ASC")
+	if limit > 0 {
+		db = db.Limit(limit)
+	}
+
+	if err := db.Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("list non-embedded text files: %w", err)
+	}
+
+	return records, nil
 }

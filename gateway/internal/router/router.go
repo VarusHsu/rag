@@ -49,6 +49,7 @@ func New(
 	{
 		files.POST("/presign-upload", fileHandler.CreateUpload)
 		files.POST("/:file_id/confirm-upload", fileHandler.ConfirmUpload)
+		files.POST("/compensate-embedding", fileHandler.CompensateEmbedding)
 	}
 
 	return r

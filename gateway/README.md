@@ -24,6 +24,7 @@ All APIs return a unified envelope:
 - `POST /api/v1/auth/login` for authentication
 - `POST /api/v1/auth/logout` for logout and token revocation
 - `POST /api/v1/files/presign-upload` for presigned upload URL generation
+- `POST /api/v1/files/compensate-embedding` for retrying non-embedded text vectorization (admin)
 - Password hashing with bcrypt
 - JWT token generation
 - PostgreSQL user repository
@@ -96,6 +97,17 @@ curl -X POST http://localhost:8080/api/v1/files/presign-upload \
 ```
 
 Use `data.upload_url` with `PUT` to upload bytes directly to MinIO from frontend.
+
+### Compensate Embedding (Admin)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/files/compensate-embedding \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <admin-jwt-token>' \
+  -d '{"limit":200}'
+```
+
+`limit` is optional (`1-1000`), default is `200`.
 
 ## Test
 
